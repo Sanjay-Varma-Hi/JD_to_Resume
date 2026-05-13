@@ -54,13 +54,13 @@ function sectionHeading(text: string): Paragraph {
   return new Paragraph({
     spacing: { before: 240, after: 80 },
     border: {
-      bottom: { style: BorderStyle.SINGLE, size: 6, color: "999999" },
+      bottom: { style: BorderStyle.SINGLE, size: 12, color: "999999" },
     },
     children: [
       new TextRun({
         text: text.toUpperCase(),
         bold: true,
-        size: 22,
+        size: 21,
         font: "Arial",
         color: "222222",
       }),
@@ -90,7 +90,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
             new TextRun({
               text: (json.name || "CANDIDATE NAME").toUpperCase(),
               bold: true,
-              size: 36,
+              size: 42,
               font: "Arial",
               color: "111111",
             }),
@@ -105,7 +105,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
             new TextRun({
               text: json.title || data.detectedRole || "Professional",
               bold: true,
-              size: 22,
+              size: 21,
               font: "Arial",
               color: "333333",
             }),
@@ -117,7 +117,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
           alignment: AlignmentType.CENTER,
           spacing: { after: 80 },
           border: {
-            bottom: { style: BorderStyle.SINGLE, size: 12, color: "1a1a1a" },
+            bottom: { style: BorderStyle.SINGLE, size: 18, color: "1a1a1a" },
           },
           children: [
             new TextRun({
@@ -135,7 +135,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
         children.push(sectionHeading("Professional Summary"));
         children.push(
           new Paragraph({
-            spacing: { after: 120 },
+            spacing: { after: 120, line: 396, lineRule: "auto" },
             children: [
               new TextRun({
                 text: json.summary,
@@ -163,7 +163,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
           if (skill.category) {
             children.push(
               new Paragraph({
-                spacing: { after: 40 },
+                spacing: { after: 40, line: 396, lineRule: "auto" },
                 children: [
                   new TextRun({
                     text: `${skill.category}: `,
@@ -184,7 +184,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
           } else {
             children.push(
               new Paragraph({
-                spacing: { after: 40 },
+                spacing: { after: 40, line: 396, lineRule: "auto" },
                 children: [
                   new TextRun({
                     text: skill.values,
@@ -224,7 +224,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
                 new TextRun({
                   text: exp.dates || "",
                   bold: true,
-                  size: 19,
+                  size: 18,
                   font: "Arial",
                   color: "555555",
                 }),
@@ -239,7 +239,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
                 new TextRun({
                   text: exp.title || "",
                   italics: true,
-                  size: 19,
+                  size: 18,
                   font: "Arial",
                   color: "444444",
                 }),
@@ -251,7 +251,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
             exp.bullets.forEach((bullet) => {
               children.push(
                 new Paragraph({
-                  spacing: { after: 40 },
+                  spacing: { after: 40, line: 396, lineRule: "auto" },
                   bullet: { level: 0 },
                   children: [
                     new TextRun({
@@ -285,7 +285,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
             projRuns.push(
               new TextRun({
                 text: ` — ${proj.description}`,
-                size: 19,
+                size: 18,
                 font: "Arial",
                 color: "555555",
               })
@@ -301,7 +301,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
             proj.bullets.forEach((bullet) => {
               children.push(
                 new Paragraph({
-                  spacing: { after: 40 },
+                  spacing: { after: 40, line: 396, lineRule: "auto" },
                   bullet: { level: 0 },
                   children: [
                     new TextRun({
@@ -324,7 +324,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
         json.education.forEach((edu) => {
           children.push(
             new Paragraph({
-              spacing: { after: 40 },
+              spacing: { after: 40, line: 396, lineRule: "auto" },
               tabStops: [
                 { type: TabStopType.RIGHT, position: TabStopPosition.MAX },
               ],
@@ -338,7 +338,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
                 }),
                 new TextRun({
                   text: ` — ${edu.institution || ""}`,
-                  size: 19,
+                  size: 18,
                   font: "Arial",
                   color: "555555",
                 }),
@@ -346,7 +346,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
                 new TextRun({
                   text: edu.dates || "",
                   bold: true,
-                  size: 19,
+                  size: 18,
                   font: "Arial",
                   color: "555555",
                 }),
@@ -362,7 +362,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
         json.certifications.forEach((cert) => {
           children.push(
             new Paragraph({
-              spacing: { after: 40 },
+              spacing: { after: 40, line: 396, lineRule: "auto" },
               bullet: { level: 0 },
               children: [
                 new TextRun({
@@ -385,9 +385,9 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
               page: {
                 margin: {
                   top: 720,
-                  right: 900,
+                  right: 840,
                   bottom: 720,
-                  left: 900,
+                  left: 840,
                 },
               },
             },
