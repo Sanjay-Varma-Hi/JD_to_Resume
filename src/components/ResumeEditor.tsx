@@ -70,12 +70,13 @@ function sectionHeading(text: string): Paragraph {
 
 export default function ResumeEditor({ data }: ResumeEditorProps) {
   const contentRef = useRef<HTMLDivElement>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
+  const [isDownloadingDocx, setIsDownloadingDocx] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   const handleDownloadDocx = async () => {
     const json = data.resumeJson;
     if (!json) return;
-    setIsDownloading(true);
+    setIsDownloadingDocx(true);
 
     try {
       const children: Paragraph[] = [];
@@ -408,7 +409,35 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
     } catch (err) {
       console.error("DOCX generation failed:", err);
     } finally {
-      setIsDownloading(false);
+      setIsDownloadingDocx(false);
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!contentRef.current) return;
+    setIsDownloadingPdf(true);
+    try {
+      const html2pdf = (await import("html2pdf.js")).default;
+      const element = contentRef.current;
+      const opt: any = {
+        margin: [10, 0, 10, 0],
+        filename: `Resume_${data.resumeJson?.name?.replace(/\s+/g, "_") || "Tailored"}.pdf`,
+        image: { type: "jpeg", quality: 1 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          letterRendering: true,
+          width: element.scrollWidth,
+          windowWidth: element.scrollWidth,
+        },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["css"], avoid: ".avoid-break" },
+      };
+      await html2pdf().set(opt).from(element).save();
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+    } finally {
+      setIsDownloadingPdf(false);
     }
   };
 
@@ -438,26 +467,45 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
         <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-zinc-400">
           <Edit3 className="w-5 h-5 text-blue-500" />
           <p>
-            <strong>Interactive Preview:</strong> Click anywhere on the resume below to edit text. Then download as Word.
+            <strong>Interactive Preview:</strong> Click anywhere on the resume below to edit text. Then download as Word or PDF.
           </p>
         </div>
-        <button
-          onClick={handleDownloadDocx}
-          disabled={isDownloading}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-md shadow-blue-500/20 disabled:opacity-70"
-        >
-          {isDownloading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Generating DOCX...
-            </>
-          ) : (
-            <>
-              <Download className="w-4 h-4" />
-              Download as DOCX
-            </>
-          )}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleDownloadDocx}
+            disabled={isDownloadingDocx || isDownloadingPdf}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium transition-colors shadow-md shadow-blue-500/20 disabled:opacity-70"
+          >
+            {isDownloadingDocx ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                DOCX...
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                DOCX
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleDownloadPDF}
+            disabled={isDownloadingDocx || isDownloadingPdf}
+            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-medium transition-colors shadow-md shadow-red-500/20 disabled:opacity-70"
+          >
+            {isDownloadingPdf ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                PDF...
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                PDF
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* A4 Resume Container */}
