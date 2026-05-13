@@ -2,6 +2,21 @@
 
 import { useRef, useState } from "react";
 import { Download, Edit3, Loader2 } from "lucide-react";
+import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  AlignmentType,
+  BorderStyle,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  TabStopPosition,
+  TabStopType,
+  HeadingLevel,
+} from "docx";
 
 interface ResumeEditorProps {
   data: {
@@ -34,33 +49,364 @@ interface ResumeEditorProps {
   };
 }
 
+// Helper: section heading with bottom border
+function sectionHeading(text: string): Paragraph {
+  return new Paragraph({
+    spacing: { before: 240, after: 80 },
+    border: {
+      bottom: { style: BorderStyle.SINGLE, size: 6, color: "999999" },
+    },
+    children: [
+      new TextRun({
+        text: text.toUpperCase(),
+        bold: true,
+        size: 22,
+        font: "Arial",
+        color: "222222",
+      }),
+    ],
+  });
+}
+
 export default function ResumeEditor({ data }: ResumeEditorProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  const handleDownloadPDF = async () => {
-    if (!contentRef.current) return;
+  const handleDownloadDocx = async () => {
+    const json = data.resumeJson;
+    if (!json) return;
     setIsDownloading(true);
+
     try {
-      const html2pdf = (await import("html2pdf.js")).default;
-      const element = contentRef.current;
-      const opt: any = {
-        margin: [10, 0, 10, 0],
-        filename: `Resume_${data.resumeJson?.name?.replace(/\s+/g, "_") || "Tailored"}.pdf`,
-        image: { type: "jpeg", quality: 1 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          letterRendering: true,
-          width: element.scrollWidth,
-          windowWidth: element.scrollWidth,
-        },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["css"], avoid: ".avoid-break" },
-      };
-      await html2pdf().set(opt).from(element).save();
+      const children: Paragraph[] = [];
+
+      // ===== HEADER =====
+      children.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 40 },
+          children: [
+            new TextRun({
+              text: (json.name || "CANDIDATE NAME").toUpperCase(),
+              bold: true,
+              size: 36,
+              font: "Arial",
+              color: "111111",
+            }),
+          ],
+        })
+      );
+      children.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 40 },
+          children: [
+            new TextRun({
+              text: json.title || data.detectedRole || "Professional",
+              bold: true,
+              size: 22,
+              font: "Arial",
+              color: "333333",
+            }),
+          ],
+        })
+      );
+      children.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 80 },
+          border: {
+            bottom: { style: BorderStyle.SINGLE, size: 12, color: "1a1a1a" },
+          },
+          children: [
+            new TextRun({
+              text: json.contact || "",
+              size: 20,
+              font: "Arial",
+              color: "555555",
+            }),
+          ],
+        })
+      );
+
+      // ===== PROFESSIONAL SUMMARY =====
+      if (json.summary) {
+        children.push(sectionHeading("Professional Summary"));
+        children.push(
+          new Paragraph({
+            spacing: { after: 120 },
+            children: [
+              new TextRun({
+                text: json.summary,
+                size: 20,
+                font: "Arial",
+                color: "333333",
+              }),
+            ],
+          })
+        );
+      }
+
+      // ===== TECHNICAL SKILLS =====
+      const parsedSkills = (json.skills || []).map((s) => {
+        const colonIdx = s.indexOf(":");
+        if (colonIdx > -1) {
+          return { category: s.substring(0, colonIdx).trim(), values: s.substring(colonIdx + 1).trim() };
+        }
+        return { category: "", values: s };
+      });
+
+      if (parsedSkills.length > 0) {
+        children.push(sectionHeading("Technical Skills"));
+        parsedSkills.forEach((skill) => {
+          if (skill.category) {
+            children.push(
+              new Paragraph({
+                spacing: { after: 40 },
+                children: [
+                  new TextRun({
+                    text: `${skill.category}: `,
+                    bold: true,
+                    size: 20,
+                    font: "Arial",
+                    color: "222222",
+                  }),
+                  new TextRun({
+                    text: skill.values,
+                    size: 20,
+                    font: "Arial",
+                    color: "444444",
+                  }),
+                ],
+              })
+            );
+          } else {
+            children.push(
+              new Paragraph({
+                spacing: { after: 40 },
+                children: [
+                  new TextRun({
+                    text: skill.values,
+                    size: 20,
+                    font: "Arial",
+                    color: "444444",
+                  }),
+                ],
+              })
+            );
+          }
+        });
+      }
+
+      // ===== PROFESSIONAL EXPERIENCE =====
+      if (json.experience && json.experience.length > 0) {
+        children.push(sectionHeading("Professional Experience"));
+        json.experience.forEach((exp) => {
+          // Company + Dates on same line using tab stops
+          children.push(
+            new Paragraph({
+              spacing: { before: 160, after: 20 },
+              tabStops: [
+                { type: TabStopType.RIGHT, position: TabStopPosition.MAX },
+              ],
+              children: [
+                new TextRun({
+                  text: exp.company || "",
+                  bold: true,
+                  size: 20,
+                  font: "Arial",
+                  color: "111111",
+                }),
+                new TextRun({
+                  text: "\t",
+                }),
+                new TextRun({
+                  text: exp.dates || "",
+                  bold: true,
+                  size: 19,
+                  font: "Arial",
+                  color: "555555",
+                }),
+              ],
+            })
+          );
+          // Title (italic)
+          children.push(
+            new Paragraph({
+              spacing: { after: 40 },
+              children: [
+                new TextRun({
+                  text: exp.title || "",
+                  italics: true,
+                  size: 19,
+                  font: "Arial",
+                  color: "444444",
+                }),
+              ],
+            })
+          );
+          // Bullets
+          if (exp.bullets) {
+            exp.bullets.forEach((bullet) => {
+              children.push(
+                new Paragraph({
+                  spacing: { after: 40 },
+                  bullet: { level: 0 },
+                  children: [
+                    new TextRun({
+                      text: bullet,
+                      size: 20,
+                      font: "Arial",
+                      color: "333333",
+                    }),
+                  ],
+                })
+              );
+            });
+          }
+        });
+      }
+
+      // ===== PROJECTS =====
+      if (json.projects && json.projects.length > 0) {
+        children.push(sectionHeading("Projects"));
+        json.projects.forEach((proj) => {
+          const projRuns: TextRun[] = [
+            new TextRun({
+              text: proj.name || "",
+              bold: true,
+              size: 20,
+              font: "Arial",
+              color: "111111",
+            }),
+          ];
+          if (proj.description) {
+            projRuns.push(
+              new TextRun({
+                text: ` — ${proj.description}`,
+                size: 19,
+                font: "Arial",
+                color: "555555",
+              })
+            );
+          }
+          children.push(
+            new Paragraph({
+              spacing: { before: 120, after: 40 },
+              children: projRuns,
+            })
+          );
+          if (proj.bullets) {
+            proj.bullets.forEach((bullet) => {
+              children.push(
+                new Paragraph({
+                  spacing: { after: 40 },
+                  bullet: { level: 0 },
+                  children: [
+                    new TextRun({
+                      text: bullet,
+                      size: 20,
+                      font: "Arial",
+                      color: "333333",
+                    }),
+                  ],
+                })
+              );
+            });
+          }
+        });
+      }
+
+      // ===== EDUCATION =====
+      if (json.education && json.education.length > 0) {
+        children.push(sectionHeading("Education"));
+        json.education.forEach((edu) => {
+          children.push(
+            new Paragraph({
+              spacing: { after: 40 },
+              tabStops: [
+                { type: TabStopType.RIGHT, position: TabStopPosition.MAX },
+              ],
+              children: [
+                new TextRun({
+                  text: edu.degree || "",
+                  bold: true,
+                  size: 20,
+                  font: "Arial",
+                  color: "111111",
+                }),
+                new TextRun({
+                  text: ` — ${edu.institution || ""}`,
+                  size: 19,
+                  font: "Arial",
+                  color: "555555",
+                }),
+                new TextRun({ text: "\t" }),
+                new TextRun({
+                  text: edu.dates || "",
+                  bold: true,
+                  size: 19,
+                  font: "Arial",
+                  color: "555555",
+                }),
+              ],
+            })
+          );
+        });
+      }
+
+      // ===== CERTIFICATIONS =====
+      if (json.certifications && json.certifications.length > 0) {
+        children.push(sectionHeading("Certifications"));
+        json.certifications.forEach((cert) => {
+          children.push(
+            new Paragraph({
+              spacing: { after: 40 },
+              bullet: { level: 0 },
+              children: [
+                new TextRun({
+                  text: cert,
+                  size: 20,
+                  font: "Arial",
+                  color: "333333",
+                }),
+              ],
+            })
+          );
+        });
+      }
+
+      // Build document
+      const doc = new Document({
+        sections: [
+          {
+            properties: {
+              page: {
+                margin: {
+                  top: 720,
+                  right: 900,
+                  bottom: 720,
+                  left: 900,
+                },
+              },
+            },
+            children,
+          },
+        ],
+      });
+
+      // Generate and download
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Resume_${json.name?.replace(/\s+/g, "_") || "Tailored"}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("PDF generation failed:", err);
+      console.error("DOCX generation failed:", err);
     } finally {
       setIsDownloading(false);
     }
@@ -92,23 +438,23 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
         <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-zinc-400">
           <Edit3 className="w-5 h-5 text-blue-500" />
           <p>
-            <strong>Interactive Preview:</strong> Click anywhere on the resume below to edit text. Then download as PDF.
+            <strong>Interactive Preview:</strong> Click anywhere on the resume below to edit text. Then download as Word.
           </p>
         </div>
         <button
-          onClick={handleDownloadPDF}
+          onClick={handleDownloadDocx}
           disabled={isDownloading}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-md shadow-blue-500/20 disabled:opacity-70"
         >
           {isDownloading ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              Generating PDF...
+              Generating DOCX...
             </>
           ) : (
             <>
               <Download className="w-4 h-4" />
-              Download as PDF
+              Download as DOCX
             </>
           )}
         </button>
