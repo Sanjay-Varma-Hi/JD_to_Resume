@@ -44,7 +44,7 @@ export default function ResumeEditor({ data }: ResumeEditorProps) {
     try {
       const html2pdf = (await import("html2pdf.js")).default;
       const element = contentRef.current;
-      const opt = {
+      const opt: any = {
         margin: [10, 0, 10, 0],
         filename: `Resume_${data.resumeJson?.name?.replace(/\s+/g, "_") || "Tailored"}.pdf`,
         image: { type: "jpeg", quality: 1 },
