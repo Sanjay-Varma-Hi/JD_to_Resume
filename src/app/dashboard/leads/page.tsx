@@ -72,7 +72,15 @@ export default function LeadsPage() {
   const triggerScrape = async () => {
     setIsScraping(true);
     try {
-      await fetch(`${API_BASE_URL}/api/scrape`, { method: "POST" });
+      const res = await fetch(`${API_BASE_URL}/api/scrape`, { method: "POST" });
+      const data = await res.json();
+      
+      if (data.status === "error") {
+        alert(data.message);
+        setIsScraping(false);
+        return;
+      }
+      
       localStorage.setItem("leads_last_scraped", Date.now().toString());
       setCooldownLeft(3600);
       setTimeout(() => {
@@ -106,12 +114,15 @@ export default function LeadsPage() {
         body: JSON.stringify({ email_draft: editedEmail })
       });
       const data = await res.json();
-      alert(data.message);
-      if (data.status === "ok") {
-        updateStatus(id, "contacted");
+      if (!res.ok) {
+        alert(data.detail || "Failed to send email");
+        return;
       }
+      alert(data.message || "Successfully sent email!");
+      updateStatus(id, "contacted");
     } catch (err) {
-      console.error("Failed to send email");
+      console.error("Failed to send email", err);
+      alert("An unexpected error occurred while sending the email.");
     }
   };
 

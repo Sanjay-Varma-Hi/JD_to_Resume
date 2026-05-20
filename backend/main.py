@@ -86,6 +86,13 @@ import subprocess
 
 @app.post("/api/scrape")
 async def trigger_scrape():
+    # If running on Render, scraping is disabled to prevent LinkedIn blocking and resource exhaustion.
+    if os.getenv("RENDER"):
+        return {
+            "status": "error", 
+            "message": "Scraping on Render is disabled to bypass LinkedIn security. Please run 'python scraper.py && python ai_processor.py' locally on your machine, and your new leads will automatically sync to MongoDB Atlas!"
+        }
+    
     # Run the scraper then the AI processor sequentially in the background
     cmd = "[ -d backend ] && cd backend; source venv/bin/activate && python scraper.py && python ai_processor.py"
     subprocess.Popen(cmd, shell=True)
@@ -197,4 +204,10 @@ async def send_email(lead_id: str, request: EmailRequest = None, db=Depends(get_
         return {"status": "ok", "message": f"Successfully sent email to {recruiter_email}!"}
     except Exception as e:
         print(f"Failed to send email: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to send email via SMTP: {str(e)}")
+        error_msg = str(e)
+        if os.getenv("RENDER"):
+            raise HTTPException(
+                status_code=500,
+                detail="Outbound SMTP (port 587) is blocked on Render's Free tier to prevent spam. Please run this app locally to send emails, or upgrade Render to open SMTP."
+            )
+        raise HTTPException(status_code=500, detail=f"Failed to send email via SMTP: {error_msg}")
