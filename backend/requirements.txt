@@ -7,3 +7,5 @@ playwright
 openai
 python-dotenv
 pydantic
+dnspython
+
