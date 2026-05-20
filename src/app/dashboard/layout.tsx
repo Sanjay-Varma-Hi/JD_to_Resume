@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, FilePlus2, History, LogOut, Briefcase } from "lucide-react";
+import { FileText, FilePlus2, History, LogOut, Briefcase, Users, AlertTriangle } from "lucide-react";
 import { logout } from "@/lib/actions";
+import { useState, useEffect } from "react";
+import { API_BASE_URL } from "@/lib/config";
 
 export default function DashboardLayout({
   children,
@@ -11,11 +13,31 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [isLinkedInLoggedIn, setIsLinkedInLoggedIn] = useState<boolean>(true);
+
+  useEffect(() => {
+    const checkLinkedInStatus = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/linkedin-status`);
+        if (res.ok) {
+          const data = await res.json();
+          setIsLinkedInLoggedIn(data.logged_in);
+        }
+      } catch (err) {
+        console.error("Failed to check LinkedIn status:", err);
+      }
+    };
+
+    checkLinkedInStatus();
+    const interval = setInterval(checkLinkedInStatus, 15000); // Check status every 15s
+    return () => clearInterval(interval);
+  }, []);
 
   const navItems = [
     { name: "Generate", href: "/dashboard", icon: FilePlus2 },
     { name: "Base Resume", href: "/dashboard/base-resume", icon: FileText },
     { name: "History", href: "/dashboard/history", icon: History },
+    { name: "Scraped Leads", href: "/dashboard/leads", icon: Users },
   ];
 
   return (
@@ -50,6 +72,21 @@ export default function DashboardLayout({
             );
           })}
         </nav>
+
+        {/* LinkedIn Status Warning */}
+        {!isLinkedInLoggedIn && (
+          <div className="mx-4 my-2 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-xl flex items-start gap-2.5 animate-pulse">
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                LinkedIn Logged Out
+              </p>
+              <p className="text-[10px] text-amber-600 dark:text-amber-500 mt-1 leading-normal">
+                Run <code className="bg-amber-100 dark:bg-amber-900/50 px-1 py-0.5 rounded font-mono text-[9px]">python scraper.py</code> in the backend folder to log back in.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="p-4 border-t border-slate-200 dark:border-zinc-800">
           <form action={logout}>

@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+motor
+pymongo
+beautifulsoup4
+playwright
+openai
+python-dotenv
+pydantic
