@@ -8,4 +8,5 @@ openai
 python-dotenv
 pydantic
 dnspython
+python-multipart
 
