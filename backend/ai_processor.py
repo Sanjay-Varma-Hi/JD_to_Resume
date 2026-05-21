@@ -33,7 +33,22 @@ Extract the following information from the provided job description and return i
     "required_skills": [list of strings],
     "ai_score": integer (0 to 100 representing how well it matches: DevOps, 10+ years, C2C, USA),
     "ai_summary": "1-2 sentence summary of the role",
-    "email_draft": "Draft an email using EXACTLY the following template. DO NOT USE ANY BRACKETS [ ] OR PLACEHOLDERS IN YOUR FINAL OUTPUT. If you know the recruiter's name, use it (e.g., 'Hi John,'). If you do not know the name, use 'Hi Hiring Team,'. For the subject, write a real subject line. Template:\n\nSubject: Interested in the <Role Name> Role\n\nHi <Recruiter Name or Hiring Team>,\n\nI am writing to express my interest in the <Role Name> role you have available. With over 10 years of experience in DevOps and SRE, I am available immediately for C2C opportunities across the USA. I would love to discuss how my skills align with your requirements.\n\nBest regards,\nSanjay Varma\n+1 5109603865"
+    "email_draft": "Draft an attractive, customized email (approx 150-250 words) from the candidate to the recruiter. 
+DO NOT USE ANY BRACKETS [ ] OR PLACEHOLDERS IN YOUR FINAL OUTPUT. If you know the recruiter's name, use it (e.g., 'Hi John,'). If you do not know the name, use 'Hi Hiring Team,'. 
+Format the email as:
+Subject: <Catchy Subject Line matching the role and C2C availability>
+
+Hi <Name/Hiring Team>,
+
+<1-2 sentence introduction stating Sanjay Varma is a Senior DevOps/SRE Engineer with 10+ years of experience, immediately available for C2C opportunities.>
+
+<A paragraph highlighting 2-3 key technical alignments (e.g. Kubernetes, Terraform, CI/CD, AWS, Azure, Ansible, monitoring) between the Candidate's Base Resume and the specific requirements of the Job Description. Be specific, attractive, and direct. If the Candidate's Base Resume is not provided, mention standard DevOps/SRE strengths like Kubernetes, Terraform, Cloud, and CI/CD.>
+
+I am authorized to work in the US and looking for remote or hybrid contract roles. I would love to connect to discuss how I can add value to your team.
+
+Best regards,
+Sanjay Varma
++1 5109603865"
 }
 
 Rules:
@@ -54,6 +69,15 @@ async def process_unscored_leads():
         await close_mongo_connection()
         return
 
+    # Fetch candidate's base resume
+    base_resume_text = ""
+    try:
+        base_resume_doc = await db["baseresumes"].find_one()
+        if base_resume_doc:
+            base_resume_text = base_resume_doc.get("content", "")
+    except Exception as e:
+        print(f"Note: Could not fetch base resume from db: {e}")
+
     print(f"Found {len(unscored_posts)} posts to process with AI...")
 
     for post in unscored_posts:
@@ -64,11 +88,15 @@ async def process_unscored_leads():
         print(f"Processing post: {post['post_url']}...")
         
         try:
+            user_content = f"Analyze this job post:\n\n{description}"
+            if base_resume_text:
+                user_content += f"\n\nCandidate's Base Resume:\n\n{base_resume_text}"
+                
             response = await client.chat.completions.create(
                 model="deepseek-chat",
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": f"Analyze this job post:\n\n{description}"}
+                    {"role": "user", "content": user_content}
                 ],
                 response_format={"type": "json_object"},
                 temperature=0.1

@@ -106,6 +106,15 @@ async def upload_resume(file: UploadFile = File(...)):
     if not file.filename.endswith(".pdf") and not file.filename.endswith(".docx"):
         raise HTTPException(status_code=400, detail="Only PDF or DOCX files are allowed.")
     
+    # 1. Enforce only ONE file: delete any existing fallback files to ensure replacement
+    for existing_ext in ["pdf", "docx"]:
+        old_file = f"uploads/secondary_resume.{existing_ext}"
+        if os.path.exists(old_file):
+            try:
+                os.remove(old_file)
+            except Exception as e:
+                print(f"Error removing old attachment {old_file}: {e}")
+
     # Extract extension
     ext = file.filename.split('.')[-1]
     file_path = f"uploads/secondary_resume.{ext}"
@@ -118,7 +127,60 @@ async def upload_resume(file: UploadFile = File(...)):
     with open("uploads/current_resume_ext.txt", "w") as f:
         f.write(ext)
         
-    return {"status": "ok", "message": f"Resume uploaded successfully! Emails will now attach this {ext.upper()} file."}
+    # Save metadata for UI display
+    import json
+    from datetime import datetime
+    metadata = {
+        "original_filename": file.filename,
+        "ext": ext,
+        "uploaded_at": datetime.utcnow().isoformat()
+    }
+    with open("uploads/resume_metadata.json", "w") as f:
+        json.dump(metadata, f)
+        
+    return {"status": "ok", "message": f"Resume replaced successfully! Emails will now attach '{file.filename}'."}
+
+@app.get("/api/current-resume")
+async def get_current_resume():
+    import json
+    metadata_path = "uploads/resume_metadata.json"
+    if os.path.exists(metadata_path):
+        try:
+            with open(metadata_path, "r") as f:
+                metadata = json.load(f)
+            # Verify the physical file exists
+            file_path = f"uploads/secondary_resume.{metadata.get('ext')}"
+            if os.path.exists(file_path):
+                return {
+                    "exists": True,
+                    "filename": metadata.get("original_filename"),
+                    "ext": metadata.get("ext"),
+                    "uploaded_at": metadata.get("uploaded_at")
+                }
+        except Exception as e:
+            print(f"Error loading resume metadata: {e}")
+            
+    return {"exists": False, "filename": None, "ext": None, "uploaded_at": None}
+
+@app.delete("/api/delete-resume")
+async def delete_resume():
+    # Remove files
+    files_to_remove = [
+        "uploads/current_resume_ext.txt",
+        "uploads/resume_metadata.json",
+        "uploads/secondary_resume.pdf",
+        "uploads/secondary_resume.docx"
+    ]
+    removed = []
+    for f in files_to_remove:
+        if os.path.exists(f):
+            try:
+                os.remove(f)
+                removed.append(f)
+            except Exception as e:
+                print(f"Error removing {f}: {e}")
+    return {"status": "ok", "message": "Global email attachment removed successfully.", "removed": removed}
+
 
 import smtplib
 from email.mime.text import MIMEText

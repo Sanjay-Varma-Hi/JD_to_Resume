@@ -17,9 +17,30 @@ export default function BaseResumePage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Global Email Attachment State
+  const [attachedResume, setAttachedResume] = useState<{
+    exists: boolean;
+    filename: string | null;
+    ext: string | null;
+    uploaded_at: string | null;
+  } | null>(null);
+
   useEffect(() => {
     fetchBaseResume();
+    fetchAttachedResume();
   }, []);
+
+  const fetchAttachedResume = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/current-resume`);
+      if (res.ok) {
+        const data = await res.json();
+        setAttachedResume(data);
+      }
+    } catch (err) {
+      console.error("Error fetching attached resume:", err);
+    }
+  };
 
   const fetchBaseResume = async () => {
     try {
@@ -176,6 +197,44 @@ export default function BaseResumePage() {
         <p className="text-sm text-slate-500 mb-4">
           Upload a static PDF or DOCX resume here. Every email you send via the Leads Dashboard will instantly attach this exact file.
         </p>
+
+        {attachedResume?.exists ? (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-blue-100 bg-blue-50/50 dark:border-blue-900/30 dark:bg-blue-950/20 mb-4">
+            <div className="flex items-center gap-3">
+              <FileBadge className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+              <div>
+                <p className="font-semibold text-slate-800 dark:text-zinc-200 text-sm break-all">
+                  {attachedResume.filename}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-zinc-400">
+                  Type: {attachedResume.ext?.toUpperCase()} • Uploaded: {new Date(attachedResume.uploaded_at || "").toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                if (!confirm("Are you sure you want to remove the global email attachment?")) return;
+                try {
+                  const res = await fetch(`${API_BASE_URL}/api/delete-resume`, { method: "DELETE" });
+                  if (res.ok) {
+                    fetchAttachedResume();
+                  }
+                } catch (err) {
+                  console.error("Failed to delete attached resume:", err);
+                }
+              }}
+              className="px-3.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-950/40 dark:hover:bg-red-950/60 dark:text-red-400 font-medium rounded-xl text-xs flex items-center gap-1.5 transition-colors animate-fade-in"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Remove File
+            </button>
+          </div>
+        ) : (
+          <div className="p-4 rounded-xl border border-dashed border-slate-200 dark:border-zinc-800 text-center text-sm text-slate-400 mb-4">
+            No file attached yet.
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
           <input
             type="file"
@@ -195,8 +254,12 @@ export default function BaseResumePage() {
                   body: formData
                 });
                 const data = await res.json();
-                if (res.ok) alert("Success: " + data.message);
-                else alert("Error: " + (data.detail || "Upload failed"));
+                if (res.ok) {
+                  alert("Success: " + data.message);
+                  fetchAttachedResume();
+                } else {
+                  alert("Error: " + (data.detail || "Upload failed"));
+                }
               } catch (err) {
                 alert("Error connecting to backend to upload resume.");
               }
@@ -204,10 +267,10 @@ export default function BaseResumePage() {
           />
           <label 
             htmlFor="global-resume-upload"
-            className="px-5 py-2.5 bg-white hover:bg-slate-50 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 font-medium rounded-xl cursor-pointer transition-colors border border-slate-200 dark:border-zinc-700 shadow-sm flex items-center gap-2 w-fit"
+            className="px-5 py-2.5 bg-white hover:bg-slate-50 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 font-medium rounded-xl cursor-pointer transition-colors border border-slate-200 dark:border-zinc-700 shadow-sm flex items-center gap-2 w-fit text-sm"
           >
             <UploadCloud className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            Upload Static Resume (PDF/DOCX)
+            {attachedResume?.exists ? "Replace Attachment" : "Upload Static Resume (PDF/DOCX)"}
           </label>
         </div>
       </div>
