@@ -171,15 +171,15 @@ export default function BaseResumePage() {
       <div className="mb-8 glass-card rounded-2xl p-6 border border-slate-200 dark:border-zinc-800">
         <label className="block text-sm font-semibold text-slate-700 dark:text-zinc-300 mb-1 flex items-center gap-2">
           <FileText className="w-5 h-5 text-blue-500" />
-          Global Email Attachment (Fallback PDF)
+          Global Email Attachment (PDF or DOCX)
         </label>
         <p className="text-sm text-slate-500 mb-4">
-          Upload a static PDF resume here. Every email you send via the Leads Dashboard will instantly attach this exact file.
+          Upload a static PDF or DOCX resume here. Every email you send via the Leads Dashboard will instantly attach this exact file.
         </p>
         <div className="flex items-center gap-3">
           <input
             type="file"
-            accept=".pdf"
+            accept=".pdf,.docx"
             id="global-resume-upload"
             className="hidden"
             onChange={async (e) => {
@@ -207,7 +207,7 @@ export default function BaseResumePage() {
             className="px-5 py-2.5 bg-white hover:bg-slate-50 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 font-medium rounded-xl cursor-pointer transition-colors border border-slate-200 dark:border-zinc-700 shadow-sm flex items-center gap-2 w-fit"
           >
             <UploadCloud className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            Upload Static PDF
+            Upload Static Resume (PDF/DOCX)
           </label>
         </div>
       </div>
