@@ -235,6 +235,8 @@ if __name__ == "__main__":
             roles = [
                 '"Senior DevOps Engineer"',
                 '"Senior SRE Engineer"',
+                '"DevOps Engineer"',
+                '"SRE Engineer"',
                 '"Platform Engineer"',
                 '"Cloud Infrastructure Engineer"',
                 '"Kubernetes Engineer"',

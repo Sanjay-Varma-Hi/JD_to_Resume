@@ -49,4 +49,5 @@ __pycache__/
 *.pyc
 backend/venv/
 backend/__pycache__/
+backend/uploads/
 

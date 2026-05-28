@@ -23,6 +23,7 @@ export default function BaseResumePage() {
     filename: string | null;
     ext: string | null;
     uploaded_at: string | null;
+    attach_to_emails?: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -198,8 +199,53 @@ export default function BaseResumePage() {
           Upload a static PDF or DOCX resume here. Every email you send via the Leads Dashboard will instantly attach this exact file.
         </p>
 
+        {/* Attachment Toggle Switch */}
+        <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/20 mb-4">
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold text-slate-800 dark:text-zinc-200">
+              Attach Resume to Outgoing Emails
+            </span>
+            <span className="text-xs text-slate-500 dark:text-zinc-400">
+              When enabled, emails sent from the Leads Dashboard will include this file as an attachment.
+            </span>
+          </div>
+          <button
+            onClick={async () => {
+              if (!attachedResume?.exists) {
+                alert("Please upload a resume first before enabling attachment.");
+                return;
+              }
+              const nextVal = !attachedResume.attach_to_emails;
+              try {
+                const res = await fetch(`${API_BASE_URL}/api/current-resume/toggle-attach`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ attach: nextVal })
+                });
+                if (res.ok) {
+                  fetchAttachedResume();
+                }
+              } catch (err) {
+                console.error("Failed to toggle attachment settings:", err);
+              }
+            }}
+            disabled={!attachedResume?.exists}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+              attachedResume?.attach_to_emails && attachedResume?.exists
+                ? "bg-blue-600"
+                : "bg-slate-200 dark:bg-zinc-700"
+            } ${!attachedResume?.exists ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                attachedResume?.attach_to_emails && attachedResume?.exists ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+
         {attachedResume?.exists ? (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-blue-100 bg-blue-50/50 dark:border-blue-900/30 dark:bg-blue-950/20 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-blue-100 bg-blue-50/50 dark:border-blue-900/30 dark:bg-blue-950/20 mb-4 animate-fade-in">
             <div className="flex items-center gap-3">
               <FileBadge className="w-8 h-8 text-blue-600 dark:text-blue-400" />
               <div>
@@ -223,7 +269,7 @@ export default function BaseResumePage() {
                   console.error("Failed to delete attached resume:", err);
                 }
               }}
-              className="px-3.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-950/40 dark:hover:bg-red-950/60 dark:text-red-400 font-medium rounded-xl text-xs flex items-center gap-1.5 transition-colors animate-fade-in"
+              className="px-3.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-950/40 dark:hover:bg-red-950/60 dark:text-red-400 font-medium rounded-xl text-xs flex items-center gap-1.5 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Remove File

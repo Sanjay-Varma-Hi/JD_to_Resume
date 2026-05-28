@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Sparkles, ExternalLink, Mail, CheckCircle2, Clock, RefreshCw, FileText, Trash2 } from "lucide-react";
+import { Sparkles, ExternalLink, Mail, CheckCircle2, Clock, RefreshCw, FileText, Trash2, Search, X } from "lucide-react";
 import ResumePreview from "@/components/ResumePreview";
 import ResumeEditor from "@/components/ResumeEditor";
 import { API_BASE_URL } from "@/lib/config";
@@ -17,11 +17,13 @@ export default function LeadsPage() {
   const [cooldownLeft, setCooldownLeft] = useState<number>(0);
   
   // Filters
-  const [filterDevops, setFilterDevops] = useState(false);
   const [filterC2C, setFilterC2C] = useState(false);
   const [filterUSA, setFilterUSA] = useState(false);
   const [filterNotContacted, setFilterNotContacted] = useState(false);
+  const [filterHotlisted, setFilterHotlisted] = useState(false);
+  const [filterHasEmail, setFilterHasEmail] = useState(false);
   const [filterDate, setFilterDate] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchLeads = async () => {
     setIsLoading(true);
@@ -180,11 +182,22 @@ export default function LeadsPage() {
   };
 
   const displayedLeads = leads.filter(lead => {
-    if (filterDevops && !lead.is_devops) return false;
     if (filterC2C && !lead.is_c2c) return false;
     if (filterUSA && !lead.is_remote) return false;
     if (filterNotContacted && lead.status === "contacted") return false;
+    if (filterHotlisted && lead.is_hotlisted) return false;
+    if (filterHasEmail && !lead.recruiter_email) return false;
     if (filterDate && getLocalYYYYMMDD(lead.scraped_at) !== filterDate) return false;
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      const email = (lead.recruiter_email || "").toLowerCase();
+      const name = (lead.author_name || "").toLowerCase();
+      if (!email.includes(query) && !name.includes(query)) {
+        return false;
+      }
+    }
+    
     return true;
   });
 
@@ -253,14 +266,30 @@ export default function LeadsPage() {
           <div className="p-4 border-b border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50 space-y-3">
             <h2 className="font-semibold text-slate-700 dark:text-zinc-200">All Leads ({displayedLeads.length})</h2>
             
+            {/* Search Bar */}
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                <Search className="h-4 w-4 text-slate-400 dark:text-zinc-500" />
+              </span>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by email or name..."
+                className="w-full text-sm pl-9 pr-8 py-2 rounded-xl border bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 border-slate-200 dark:border-zinc-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-sm"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
             {/* Filters */}
             <div className="flex flex-wrap gap-2">
-              <button 
-                onClick={() => setFilterDevops(!filterDevops)}
-                className={`text-xs px-2.5 py-1.5 rounded-lg border font-medium transition-colors ${filterDevops ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-zinc-700 hover:bg-slate-100 dark:hover:bg-zinc-700'}`}
-              >
-                DevOps Only
-              </button>
               <button 
                 onClick={() => setFilterC2C(!filterC2C)}
                 className={`text-xs px-2.5 py-1.5 rounded-lg border font-medium transition-colors ${filterC2C ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-zinc-700 hover:bg-slate-100 dark:hover:bg-zinc-700'}`}
@@ -278,6 +307,18 @@ export default function LeadsPage() {
                 className={`text-xs px-2.5 py-1.5 rounded-lg border font-medium transition-colors ${filterNotContacted ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-zinc-700 hover:bg-slate-100 dark:hover:bg-zinc-700'}`}
               >
                 Not Contacted
+              </button>
+              <button 
+                onClick={() => setFilterHotlisted(!filterHotlisted)}
+                className={`text-xs px-2.5 py-1.5 rounded-lg border font-medium transition-colors ${filterHotlisted ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-zinc-700 hover:bg-slate-100 dark:hover:bg-zinc-700'}`}
+              >
+                Exclude Hotlisted
+              </button>
+              <button 
+                onClick={() => setFilterHasEmail(!filterHasEmail)}
+                className={`text-xs px-2.5 py-1.5 rounded-lg border font-medium transition-colors ${filterHasEmail ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-zinc-700 hover:bg-slate-100 dark:hover:bg-zinc-700'}`}
+              >
+                Has Email
               </button>
             </div>
             
@@ -310,9 +351,17 @@ export default function LeadsPage() {
                   }`}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <span className="font-semibold text-slate-900 dark:text-white truncate pr-2">
-                      {lead.author_name}
-                    </span>
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className="font-semibold text-slate-900 dark:text-white truncate pr-2">
+                        {lead.author_name}
+                      </span>
+                      {lead.recruiter_email && (
+                        <span className="text-xs text-slate-500 dark:text-zinc-400 truncate flex items-center gap-1 mt-0.5">
+                          <Mail className="w-3.5 h-3.5 text-slate-400" />
+                          {lead.recruiter_email}
+                        </span>
+                      )}
+                    </div>
                     <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-bold border ${getScoreColor(lead.ai_score)}`}>
                       {lead.ai_score}
                     </span>
@@ -327,11 +376,18 @@ export default function LeadsPage() {
                         <span className="text-emerald-500 font-medium">Contacted</span>
                       )}
                     </div>
-                    {lead.search_role && (
-                      <div className="text-[10px] font-medium bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 px-2 py-1 rounded w-fit">
-                        {lead.search_role}
-                      </div>
-                    )}
+                    <div className="flex gap-2 items-center flex-wrap">
+                      {lead.search_role && (
+                        <div className="text-[10px] font-medium bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 px-2 py-1 rounded w-fit">
+                          {lead.search_role}
+                        </div>
+                      )}
+                      {lead.is_hotlisted && (
+                        <span className="text-[10px] font-bold bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded border border-red-200 dark:border-red-900/50 w-fit">
+                          Hotlisted
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </button>
               ))
@@ -359,6 +415,11 @@ export default function LeadsPage() {
                     <span className={`px-3 py-1 rounded-full text-sm font-bold border ${getScoreColor(selectedLead.ai_score)}`}>
                       {selectedLead.ai_score}/100 Match Score
                     </span>
+                    {selectedLead.is_hotlisted && (
+                      <span className="px-3 py-1 rounded-full text-sm font-bold border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400">
+                        Hotlisted
+                      </span>
+                    )}
                     <a 
                       href={selectedLead.post_url} 
                       target="_blank" 

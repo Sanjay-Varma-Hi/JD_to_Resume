@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
 import os
+import json
 from fastapi.middleware.cors import CORSMiddleware
 from database import connect_to_mongo, close_mongo_connection, get_db
 
@@ -127,13 +128,24 @@ async def upload_resume(file: UploadFile = File(...)):
     with open("uploads/current_resume_ext.txt", "w") as f:
         f.write(ext)
         
-    # Save metadata for UI display
+    # Save metadata for UI display, preserving existing toggle setting if present
     import json
     from datetime import datetime
+    attach_to_emails = True
+    metadata_path = "uploads/resume_metadata.json"
+    if os.path.exists(metadata_path):
+        try:
+            with open(metadata_path, "r") as f:
+                old_metadata = json.load(f)
+                attach_to_emails = old_metadata.get("attach_to_emails", True)
+        except:
+            pass
+
     metadata = {
         "original_filename": file.filename,
         "ext": ext,
-        "uploaded_at": datetime.utcnow().isoformat()
+        "uploaded_at": datetime.utcnow().isoformat(),
+        "attach_to_emails": attach_to_emails
     }
     with open("uploads/resume_metadata.json", "w") as f:
         json.dump(metadata, f)
@@ -155,12 +167,30 @@ async def get_current_resume():
                     "exists": True,
                     "filename": metadata.get("original_filename"),
                     "ext": metadata.get("ext"),
-                    "uploaded_at": metadata.get("uploaded_at")
+                    "uploaded_at": metadata.get("uploaded_at"),
+                    "attach_to_emails": metadata.get("attach_to_emails", True)
                 }
         except Exception as e:
             print(f"Error loading resume metadata: {e}")
             
-    return {"exists": False, "filename": None, "ext": None, "uploaded_at": None}
+    return {"exists": False, "filename": None, "ext": None, "uploaded_at": None, "attach_to_emails": True}
+
+@app.post("/api/current-resume/toggle-attach")
+async def toggle_attach(payload: dict):
+    import json
+    metadata_path = "uploads/resume_metadata.json"
+    attach = payload.get("attach", True)
+    if os.path.exists(metadata_path):
+        try:
+            with open(metadata_path, "r") as f:
+                metadata = json.load(f)
+            metadata["attach_to_emails"] = attach
+            with open(metadata_path, "w") as f:
+                json.dump(metadata, f)
+            return {"status": "ok", "attach_to_emails": attach}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=404, detail="No resume uploaded yet.")
 
 @app.delete("/api/delete-resume")
 async def delete_resume():
@@ -240,18 +270,42 @@ async def send_email(lead_id: str, request: EmailRequest = None, db=Depends(get_
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
         
-        # Attach the universal secondary resume if it exists
-        from email.mime.application import MIMEApplication
-        if os.path.exists("uploads/current_resume_ext.txt"):
-            with open("uploads/current_resume_ext.txt", "r") as f:
-                ext = f.read().strip()
-                
-            resume_path = f"uploads/secondary_resume.{ext}"
-            if os.path.exists(resume_path):
-                with open(resume_path, "rb") as f:
-                    part = MIMEApplication(f.read(), Name=f"Resume_Sanjay_Varma.{ext}")
-                part['Content-Disposition'] = f'attachment; filename="Resume_Sanjay_Varma.{ext}"'
-                msg.attach(part)
+        # Attach the universal secondary resume if enabled and exists
+        should_attach = True
+        metadata_path = "uploads/resume_metadata.json"
+        print(f"DEBUG ATTACHMENT: Checking metadata path {metadata_path}")
+        if os.path.exists(metadata_path):
+            try:
+                with open(metadata_path, "r") as f:
+                    meta = json.load(f)
+                print(f"DEBUG ATTACHMENT: Loaded metadata: {meta}")
+                should_attach = meta.get("attach_to_emails", True)
+            except Exception as e:
+                print(f"DEBUG ATTACHMENT: Error reading metadata: {e}")
+        else:
+            print("DEBUG ATTACHMENT: Metadata file does not exist")
+            
+        print(f"DEBUG ATTACHMENT: final should_attach: {should_attach}")
+
+        if should_attach:
+            from email.mime.application import MIMEApplication
+            if os.path.exists("uploads/current_resume_ext.txt"):
+                with open("uploads/current_resume_ext.txt", "r") as f:
+                    ext = f.read().strip()
+                    
+                resume_path = f"uploads/secondary_resume.{ext}"
+                print(f"DEBUG ATTACHMENT: Attaching file from {resume_path}")
+                if os.path.exists(resume_path):
+                    with open(resume_path, "rb") as f:
+                        part = MIMEApplication(f.read(), Name=f"Resume_Sanjay_Varma.{ext}")
+                    part['Content-Disposition'] = f'attachment; filename="Resume_Sanjay_Varma.{ext}"'
+                    msg.attach(part)
+                else:
+                    print("DEBUG ATTACHMENT: Resume file path does not exist physically")
+            else:
+                print("DEBUG ATTACHMENT: uploads/current_resume_ext.txt does not exist")
+        else:
+            print("DEBUG ATTACHMENT: Skipping attachment because should_attach is False")
         
         # Connect and send
         server = smtplib.SMTP('smtp.gmail.com', 587)
