@@ -11,6 +11,7 @@ export interface IGeneratedResume extends Document {
   missingKeywords?: string[];
   resumeMarkdown?: string;
   resumeJson?: any;
+  emailDraft?: string;
   createdAt: Date;
 }
 
@@ -25,6 +26,7 @@ const GeneratedResumeSchema: Schema = new Schema({
   missingKeywords: { type: [String], default: [] },
   resumeMarkdown: { type: String },
   resumeJson: { type: Schema.Types.Mixed },
+  emailDraft: { type: String },
   createdAt: { type: Date, default: Date.now },
 });
 

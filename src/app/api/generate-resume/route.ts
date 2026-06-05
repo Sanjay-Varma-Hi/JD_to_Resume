@@ -39,6 +39,7 @@ export async function POST(request: Request) {
       missingKeywords: aiResponse.missingKeywords,
       resumeMarkdown: aiResponse.resumeMarkdown,
       resumeJson: aiResponse.resumeJson,
+      emailDraft: aiResponse.emailDraft || aiResponse.email_draft,
     });
 
     return NextResponse.json({ success: true, result: generatedResume }, { status: 200 });

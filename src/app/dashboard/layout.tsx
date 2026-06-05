@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, FilePlus2, History, LogOut, Briefcase, Users, AlertTriangle } from "lucide-react";
+import { FileText, FilePlus2, History, LogOut, Briefcase, Users, AlertTriangle, Menu, X } from "lucide-react";
 import { logout } from "@/lib/actions";
 import { useState, useEffect } from "react";
 import { API_BASE_URL } from "@/lib/config";
@@ -14,6 +14,11 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const [isLinkedInLoggedIn, setIsLinkedInLoggedIn] = useState<boolean>(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     const checkLinkedInStatus = async () => {
@@ -41,14 +46,35 @@ export default function DashboardLayout({
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-zinc-950">
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-zinc-950 relative">
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 flex flex-col border-r border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 z-10">
-        <div className="p-6 flex items-center gap-3">
-          <div className="bg-blue-600 p-2 rounded-xl text-white">
-            <Briefcase className="w-5 h-5" />
+      <aside
+        className={`fixed inset-y-0 left-0 w-64 flex flex-col border-r border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 z-50 transition-transform duration-300 ease-in-out md:translate-x-0 md:static ${
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="p-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2 rounded-xl text-white">
+              <Briefcase className="w-5 h-5" />
+            </div>
+            <span className="font-bold text-lg text-slate-900 dark:text-white">JD Builder</span>
           </div>
-          <span className="font-bold text-lg text-slate-900 dark:text-white">JD Builder</span>
+          {/* Close button inside sidebar on mobile */}
+          <button
+            onClick={() => setIsSidebarOpen(false)}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 md:hidden"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         <nav className="flex-1 px-4 space-y-2 mt-4">
@@ -101,13 +127,31 @@ export default function DashboardLayout({
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto relative">
-        <div className="absolute top-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-blue-500/5 blur-[120px] pointer-events-none" />
-        <div className="p-8 max-w-6xl mx-auto min-h-full">
-          {children}
-        </div>
-      </main>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
+        {/* Mobile Header Bar */}
+        <header className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 md:hidden z-30">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2 rounded-xl text-white">
+              <Briefcase className="w-4 h-4" />
+            </div>
+            <span className="font-bold text-base text-slate-900 dark:text-white">JD Builder</span>
+          </div>
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="p-2 rounded-lg border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        </header>
+
+        <main className="flex-1 overflow-y-auto relative">
+          <div className="absolute top-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-blue-500/5 blur-[120px] pointer-events-none" />
+          <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto min-h-full">
+            {children}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

@@ -120,9 +120,9 @@ export default function ResumePreview({ data }: ResumePreviewProps) {
       {/* Markdown Preview with ATS scores on LEFT */}
       <div className="glass-card rounded-2xl border border-slate-200 dark:border-zinc-800 overflow-hidden flex flex-col">
         {/* Header bar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50">
           {/* ATS Scores on LEFT */}
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-5 flex-wrap">
             <ScoreRing score={scoreBefore} label="Before" color="#f97316" />
             <ScoreRing score={scoreAfter} label="After" color={scoreAfter >= 90 ? "#22c55e" : "#3b82f6"} />
             <div className={`flex items-center gap-1 text-sm font-bold px-3 py-1.5 rounded-full ${improvement > 0 ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400"}`}>
@@ -132,7 +132,7 @@ export default function ResumePreview({ data }: ResumePreviewProps) {
           </div>
 
           {/* Buttons on RIGHT */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-start sm:self-auto">
             <button
               onClick={handleCopy}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-700 rounded-lg border border-slate-200 dark:border-zinc-700 transition-colors"

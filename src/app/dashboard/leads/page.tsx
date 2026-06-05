@@ -212,9 +212,11 @@ export default function LeadsPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col space-y-6 animate-fade-in-up">
+    <div className="h-[calc(100vh-10rem)] md:h-[calc(100vh-8rem)] flex flex-col space-y-4 md:space-y-6 animate-fade-in-up">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
+      <div className={`flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0 ${
+        selectedLeadId ? "hidden md:flex" : "flex"
+      }`}>
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
             <Sparkles className="text-blue-600 dark:text-blue-400 w-8 h-8" />
@@ -262,7 +264,9 @@ export default function LeadsPage() {
       <div className="flex-1 flex gap-6 min-h-0 overflow-hidden">
         
         {/* Left Pane: Lead List */}
-        <div className="w-1/3 flex flex-col glass-card rounded-2xl border border-slate-200 dark:border-zinc-800 overflow-hidden">
+        <div className={`flex flex-col glass-card rounded-2xl border border-slate-200 dark:border-zinc-800 overflow-hidden ${
+          selectedLeadId ? "hidden md:flex md:w-1/3" : "w-full md:w-1/3"
+        }`}>
           <div className="p-4 border-b border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50 space-y-3">
             <h2 className="font-semibold text-slate-700 dark:text-zinc-200">All Leads ({displayedLeads.length})</h2>
             
@@ -396,27 +400,35 @@ export default function LeadsPage() {
         </div>
 
         {/* Right Pane: Lead Details */}
-        <div className="w-2/3 glass-card rounded-2xl border border-slate-200 dark:border-zinc-800 overflow-hidden flex flex-col">
+        <div className={`glass-card rounded-2xl border border-slate-200 dark:border-zinc-800 overflow-hidden flex flex-col ${
+          selectedLeadId ? "w-full md:w-2/3" : "hidden md:flex md:w-2/3"
+        }`}>
           {selectedLead ? (
             <>
               {/* Detail Header */}
-              <div className="p-6 border-b border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50 flex justify-between items-start">
-                <div>
+              <div className="p-6 border-b border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50 flex flex-col lg:flex-row justify-between items-start gap-4">
+                <div className="w-full">
+                  <button
+                    onClick={() => setSelectedLeadId(null)}
+                    className="md:hidden flex items-center gap-1 text-blue-600 dark:text-blue-400 text-sm font-semibold mb-3 hover:underline"
+                  >
+                    ← Back to Leads
+                  </button>
                   <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
                     {selectedLead.author_name}
                   </h2>
-                  <div className="flex gap-3 items-center mb-3 flex-wrap">
-                    <span className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800 px-3 py-1 rounded-full border border-slate-200 dark:border-zinc-700 font-medium">
+                  <div className="flex gap-2 items-center mb-1 flex-wrap">
+                    <span className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800 px-3 py-1 rounded-full border border-slate-200 dark:border-zinc-700 font-medium">
                       <Mail className="w-3.5 h-3.5" />
                       {selectedLead.recruiter_email ? (
                         <a href={`mailto:${selectedLead.recruiter_email}`} className="hover:text-blue-600 dark:hover:text-blue-400">{selectedLead.recruiter_email}</a>
                       ) : "No email mentioned"}
                     </span>
-                    <span className={`px-3 py-1 rounded-full text-sm font-bold border ${getScoreColor(selectedLead.ai_score)}`}>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getScoreColor(selectedLead.ai_score)}`}>
                       {selectedLead.ai_score}/100 Match Score
                     </span>
                     {selectedLead.is_hotlisted && (
-                      <span className="px-3 py-1 rounded-full text-sm font-bold border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400">
+                      <span className="px-3 py-1 rounded-full text-xs font-bold border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400">
                         Hotlisted
                       </span>
                     )}
@@ -424,14 +436,14 @@ export default function LeadsPage() {
                       href={selectedLead.post_url} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="text-blue-600 dark:text-blue-400 text-sm flex items-center gap-1 hover:underline bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-full border border-blue-200 dark:border-blue-900/50"
+                      className="text-blue-600 dark:text-blue-400 text-xs flex items-center gap-1 hover:underline bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-full border border-blue-200 dark:border-blue-900/50"
                     >
                       View Original Post <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
                 </div>
                 
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full lg:w-auto justify-end sm:justify-start lg:justify-end shrink-0">
                   <button
                     onClick={() => {
                       if(confirm("Are you sure you want to delete this lead? It will be hidden permanently, but the URL will be remembered so it isn't scraped again.")) {
@@ -439,7 +451,7 @@ export default function LeadsPage() {
                         setSelectedLeadId(null);
                       }
                     }}
-                    className="px-4 py-2 bg-white dark:bg-zinc-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl transition-colors flex items-center gap-2 font-medium border border-slate-200 dark:border-zinc-700 hover:border-red-200 dark:hover:border-red-800 shadow-sm"
+                    className="px-4 py-2 bg-white dark:bg-zinc-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl transition-colors flex items-center gap-2 font-medium border border-slate-200 dark:border-zinc-700 hover:border-red-200 dark:hover:border-red-800 shadow-sm flex-1 sm:flex-initial justify-center"
                   >
                     <Trash2 className="w-4 h-4" />
                     Delete
@@ -447,7 +459,7 @@ export default function LeadsPage() {
                   <button
                     onClick={() => sendEmail(selectedLead._id)}
                     disabled={selectedLead.status === "contacted"}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors flex items-center gap-2 font-medium shadow-md shadow-blue-500/20 disabled:opacity-50"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors flex items-center gap-2 font-medium shadow-md shadow-blue-500/20 disabled:opacity-50 flex-1 sm:flex-initial justify-center"
                   >
                     {selectedLead.status === "contacted" ? <CheckCircle2 className="w-5 h-5" /> : <Mail className="w-5 h-5" />}
                     {selectedLead.status === "contacted" ? "Already Emailed" : "Approve & Email"}
