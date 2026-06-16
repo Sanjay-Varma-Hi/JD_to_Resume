@@ -1,6 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
 import os
-import json
 from fastapi.middleware.cors import CORSMiddleware
 from database import connect_to_mongo, close_mongo_connection, get_db
 
@@ -43,11 +42,7 @@ async def get_leads(db=Depends(get_db)):
         if "_id" in document:
             document["_id"] = str(document["_id"])
         if "scraped_at" in document and hasattr(document["scraped_at"], "isoformat"):
-            val = document["scraped_at"]
-            if val.tzinfo is None:
-                document["scraped_at"] = val.isoformat() + "Z"
-            else:
-                document["scraped_at"] = val.isoformat()
+            document["scraped_at"] = document["scraped_at"].isoformat()
         leads.append(document)
     # Sort so 'new' status and highest score are first
     leads.sort(key=lambda x: (0 if x.get("status") == "new" else 1, -x.get("ai_score", 0)))
@@ -324,87 +319,6 @@ async def send_email(lead_id: str, request: EmailRequest = None, db=Depends(get_
         return {"status": "ok", "message": f"Successfully sent email to {recruiter_email}!"}
     except Exception as e:
         print(f"Failed to send email: {e}")
-        error_msg = str(e)
-        if os.getenv("RENDER"):
-            raise HTTPException(
-                status_code=500,
-                detail="Outbound SMTP (port 587) is blocked on Render's Free tier to prevent spam. Please run this app locally to send emails, or upgrade Render to open SMTP."
-            )
-        raise HTTPException(status_code=500, detail=f"Failed to send email via SMTP: {error_msg}")
-
-class CustomEmailRequest(BaseModel):
-    to_email: str
-    subject: str
-    body: str
-    attachment_base64: str = None
-    attachment_name: str = None
-
-@app.post("/api/send-custom-email")
-async def send_custom_email(request: CustomEmailRequest):
-    gmail_address = os.getenv("GMAIL_ADDRESS")
-    gmail_password = os.getenv("GMAIL_APP_PASSWORD")
-    
-    if not gmail_address or not gmail_password or gmail_address == "your_email@gmail.com":
-        raise HTTPException(
-            status_code=500, 
-            detail="Gmail credentials are not configured in .env.local! Please add your email and App Password."
-        )
-        
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = gmail_address
-        msg['To'] = request.to_email
-        msg['Subject'] = request.subject
-        msg.attach(MIMEText(request.body, 'plain'))
-        
-        has_attached = False
-        if request.attachment_base64 and request.attachment_name:
-            import base64
-            from email.mime.application import MIMEApplication
-            try:
-                # Decoded attachment bytes
-                file_bytes = base64.b64decode(request.attachment_base64)
-                part = MIMEApplication(file_bytes, Name=request.attachment_name)
-                part['Content-Disposition'] = f'attachment; filename="{request.attachment_name}"'
-                msg.attach(part)
-                has_attached = True
-            except Exception as e:
-                print(f"Failed to attach custom file: {e}")
-
-        if not has_attached:
-            # Fallback to the universal secondary resume if enabled and exists
-            should_attach = True
-            metadata_path = "uploads/resume_metadata.json"
-            if os.path.exists(metadata_path):
-                try:
-                    with open(metadata_path, "r") as f:
-                        meta = json.load(f)
-                    should_attach = meta.get("attach_to_emails", True)
-                except Exception as e:
-                    print(f"DEBUG ATTACHMENT: Error reading metadata: {e}")
-
-            if should_attach:
-                from email.mime.application import MIMEApplication
-                if os.path.exists("uploads/current_resume_ext.txt"):
-                    with open("uploads/current_resume_ext.txt", "r") as f:
-                        ext = f.read().strip()
-                    resume_path = f"uploads/secondary_resume.{ext}"
-                    if os.path.exists(resume_path):
-                        with open(resume_path, "rb") as f:
-                            part = MIMEApplication(f.read(), Name=f"Resume_Sanjay_Varma.{ext}")
-                        part['Content-Disposition'] = f'attachment; filename="Resume_Sanjay_Varma.{ext}"'
-                        msg.attach(part)
-                
-        # Connect and send
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(gmail_address, gmail_password)
-        server.send_message(msg)
-        server.quit()
-        
-        return {"status": "ok", "message": f"Successfully sent email to {request.to_email}!"}
-    except Exception as e:
-        print(f"Failed to send custom email: {e}")
         error_msg = str(e)
         if os.getenv("RENDER"):
             raise HTTPException(

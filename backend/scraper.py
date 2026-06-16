@@ -2,6 +2,7 @@ import asyncio
 import os
 import json
 import urllib.parse
+import hashlib
 from playwright.async_api import async_playwright, Page
 from bs4 import BeautifulSoup
 
@@ -70,8 +71,8 @@ class LinkedInScraper:
         # URL encode keyword
         import urllib.parse
         encoded_keyword = urllib.parse.quote(keyword)
-        # Sort by latest and filter by past 24 hours
-        search_url = f"https://www.linkedin.com/search/results/content/?keywords={encoded_keyword}&f_TPR=r86400&sortBy=DD"
+        # Filter by past 24 hours and sort by Relevance (default) to maximize matching posts
+        search_url = f"https://www.linkedin.com/search/results/content/?datePosted=%22past-24h%22&keywords={encoded_keyword}&origin=GLOBAL_SEARCH_HEADER"
         await page.goto(search_url)
         
         # Debug: Save screenshot of the loaded page to inspect what's happening
@@ -131,19 +132,9 @@ class LinkedInScraper:
             html = await page.content()
             soup = BeautifulSoup(html, "html.parser")
             
-            # Count unique post URNs in DOM
-            links = soup.find_all('a', href=True)
-            seen_urns = set()
-            for link in links:
-                href = link['href']
-                if "highlightedUpdateUrn=" in href:
-                    parsed_url = urllib.parse.urlparse(href)
-                    params = urllib.parse.parse_qs(parsed_url.query)
-                    urn_param = params.get('highlightedUpdateUrn')
-                    if urn_param:
-                        seen_urns.add(urn_param[0])
-            
-            current_total = len(seen_urns)
+            # Count unique post cards in DOM
+            post_cards = soup.find_all('div', componentkey=lambda x: x and 'expanded' in x and 'FeedType' in x)
+            current_total = len(post_cards)
             print(f"Scroll {scroll_attempts}/{max_scrolls} - Found {current_total} posts in DOM so far...")
             
             if current_total == previous_post_count:
@@ -157,61 +148,14 @@ class LinkedInScraper:
         html = await page.content()
         soup = BeautifulSoup(html, "html.parser")
         
-        links = soup.find_all('a', href=True)
+        post_cards = soup.find_all('div', componentkey=lambda x: x and 'expanded' in x and 'FeedType' in x)
         extracted_posts = []
         seen_urls = set()
         
-        for link in links:
+        for idx, card in enumerate(post_cards):
             try:
-                href = link['href']
-                if "highlightedUpdateUrn=" not in href:
-                    continue
-                    
-                # Do not skip group posts or group updates since they contain C2C requirements
-                # We climb up and verify the card matches before extracting.
-                    
-                parsed_url = urllib.parse.urlparse(href)
-                params = urllib.parse.parse_qs(parsed_url.query)
-                urn_param = params.get('highlightedUpdateUrn')
-                
-                if not urn_param:
-                    continue
-                    
-                urn = urn_param[0]
-                post_url = f"https://www.linkedin.com/feed/update/{urn}/"
-                
-                # Prevent duplicates
-                if post_url in seen_urls or post_url in existing_urls:
-                    continue
-                
-                # Climb up to find the post container card (max 12 levels)
-                post_card = None
-                current = link
-                depth = 0
-                found_container = False
-                while current and depth < 12:
-                    current = current.parent
-                    depth += 1
-                    if not current or current.name != 'div':
-                        continue
-                    
-                    # Check for actor profile link or group actor link inside this level
-                    has_actor_link = current.find('a', href=lambda x: x and ('/in/' in x or 'linkedin.com/in/' in x or '/groups/' in x))
-                    classes = current.get('class') or []
-                    comp_key = current.get('componentkey') or ''
-                    
-                    # Only break if we have both the actor link and the card identifier
-                    if has_actor_link and ('_3e3cda34' in classes or 'FeedType' in comp_key):
-                        post_card = current
-                        found_container = True
-                        break
-                
-                # If we did not find a valid card container, ignore this link completely
-                if not found_container or not post_card:
-                    continue
-                
-                # Extract Author Name (prioritize /in/ profile name, then group name)
-                profile_links = post_card.find_all('a', href=lambda x: x and ('/in/' in x or 'linkedin.com/in/' in x))
+                # 1. Extract Author Name (prioritize /in/ profile name, then group name)
+                profile_links = card.find_all('a', href=lambda x: x and ('/in/' in x or 'linkedin.com/in/' in x))
                 author_name = "Unknown Recruiter"
                 for p_link in profile_links:
                     name_text = p_link.get_text(strip=True)
@@ -221,15 +165,15 @@ class LinkedInScraper:
                         
                 if author_name == "Unknown Recruiter":
                     # Try group name as author
-                    group_links = post_card.find_all('a', href=lambda x: x and '/groups/' in x)
+                    group_links = card.find_all('a', href=lambda x: x and '/groups/' in x)
                     for g_link in group_links:
                         name_text = g_link.get_text(strip=True)
                         if name_text and name_text != "Join" and "reactions" not in name_text.lower():
                             author_name = name_text.split('\n')[0].strip()
                             break
                 
-                # Extract Post Text
-                text_elems = post_card.find_all(['span', 'p'])
+                # 2. Extract Post Text
+                text_elems = card.find_all(['span', 'p'])
                 post_text = ""
                 max_len = 0
                 
@@ -242,6 +186,35 @@ class LinkedInScraper:
                         post_text = elem_text
                 
                 if not post_text:
+                    continue
+                
+                # 3. Extract URL or Fallback
+                post_url = None
+                links = card.find_all('a', href=True)
+                for link in links:
+                    href = link['href']
+                    if "highlightedUpdateUrn=" in href:
+                        parsed_url = urllib.parse.urlparse(href)
+                        params = urllib.parse.parse_qs(parsed_url.query)
+                        urn_param = params.get('highlightedUpdateUrn')
+                        if urn_param:
+                            post_url = f"https://www.linkedin.com/feed/update/{urn_param[0]}/"
+                            break
+                            
+                if not post_url:
+                    # Fallback to profile URL with unique query hash
+                    profile_link = card.find('a', href=lambda x: x and ('/in/' in x or 'linkedin.com/in/' in x))
+                    if profile_link:
+                        profile_url = profile_link['href'].split('?')[0]
+                        text_hash = hashlib.md5(post_text.encode('utf-8')).hexdigest()[:16]
+                        post_url = f"{profile_url}?post_hash={text_hash}"
+                    else:
+                        # Generic fallback if no profile link exists
+                        text_hash = hashlib.md5(post_text.encode('utf-8')).hexdigest()[:16]
+                        post_url = f"https://www.linkedin.com/feed/update/fallback-{text_hash}/"
+                
+                # Prevent duplicates
+                if post_url in seen_urls or post_url in existing_urls:
                     continue
                 
                 seen_urls.add(post_url)
