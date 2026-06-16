@@ -1,6 +1,7 @@
 import asyncio
 import os
 import json
+import urllib.parse
 from playwright.async_api import async_playwright, Page
 from bs4 import BeautifulSoup
 
@@ -69,9 +70,20 @@ class LinkedInScraper:
         # URL encode keyword
         import urllib.parse
         encoded_keyword = urllib.parse.quote(keyword)
-        # Sort by latest (date_posted) and filter by past 24 hours
-        search_url = f"https://www.linkedin.com/search/results/content/?datePosted=%22past-24h%22&keywords={encoded_keyword}&origin=GLOBAL_SEARCH_HEADER&sortBy=%22date_posted%22"
+        # Sort by latest and filter by past 24 hours
+        search_url = f"https://www.linkedin.com/search/results/content/?keywords={encoded_keyword}&f_TPR=r86400&sortBy=DD"
         await page.goto(search_url)
+        
+        # Debug: Save screenshot of the loaded page to inspect what's happening
+        try:
+            import os
+            os.makedirs("debug_screenshots", exist_ok=True)
+            clean_name = keyword.replace(' ', '_').replace('"', '').replace('(', '').replace(')', '').replace('/', '_')
+            screenshot_path = f"debug_screenshots/{clean_name}.png"
+            await page.screenshot(path=screenshot_path)
+            print(f"DEBUG: Saved screenshot to {screenshot_path}")
+        except Exception as e:
+            print(f"DEBUG: Failed to save screenshot: {e}")
         
         # Check if LinkedIn redirected us to the login page (session expired)
         if "login" in page.url or "sign in" in (await page.title()).lower():
@@ -99,14 +111,39 @@ class LinkedInScraper:
         
         while scroll_attempts < max_scrolls:
             scroll_attempts += 1
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            
+            # Scroll the workspace element if it exists, otherwise fall back to window
+            await page.evaluate("""
+                async () => {
+                    const el = document.getElementById('workspace');
+                    if (el) {
+                        for (let y = el.scrollTop; y < el.scrollHeight; y += 400) {
+                            el.scrollTop = y;
+                            await new Promise(resolve => setTimeout(resolve, 80));
+                        }
+                    } else {
+                        window.scrollTo(0, document.body.scrollHeight);
+                    }
+                }
+            """)
             await page.wait_for_timeout(3000)
             
             html = await page.content()
             soup = BeautifulSoup(html, "html.parser")
-            post_elements = soup.find_all('div', attrs={"data-urn": True})
             
-            current_total = len(post_elements)
+            # Count unique post URNs in DOM
+            links = soup.find_all('a', href=True)
+            seen_urns = set()
+            for link in links:
+                href = link['href']
+                if "highlightedUpdateUrn=" in href:
+                    parsed_url = urllib.parse.urlparse(href)
+                    params = urllib.parse.parse_qs(parsed_url.query)
+                    urn_param = params.get('highlightedUpdateUrn')
+                    if urn_param:
+                        seen_urns.add(urn_param[0])
+            
+            current_total = len(seen_urns)
             print(f"Scroll {scroll_attempts}/{max_scrolls} - Found {current_total} posts in DOM so far...")
             
             if current_total == previous_post_count:
@@ -116,67 +153,98 @@ class LinkedInScraper:
             previous_post_count = current_total
         
         print("Parsing posts...")
-        # Only grab elements that actually have a data-urn (the true post containers)
-        post_elements = soup.find_all('div', attrs={"data-urn": True})
+        # Re-parse the final HTML content
+        html = await page.content()
+        soup = BeautifulSoup(html, "html.parser")
         
+        links = soup.find_all('a', href=True)
         extracted_posts = []
         seen_urls = set()
         
-        for idx, post in enumerate(post_elements):
+        for link in links:
             try:
-                # 1. Author Name
-                author_elem = post.find('span', class_=lambda x: x and 'update-components-actor__name' in x)
-                author_name = author_elem.get_text(strip=True).split('\n')[0] if author_elem else "Unknown Recruiter"
-                
-                # 2. Post Text
-                text_elem = post.find('div', class_=lambda x: x and 'update-components-text' in x)
-                post_text = text_elem.get_text(separator='\n', strip=True) if text_elem else ""
-                
-                if not post_text:
+                href = link['href']
+                if "highlightedUpdateUrn=" not in href:
                     continue
-
-                # 3. True Post URL
-                # The most reliable way is to extract the data-urn attribute and construct the URL
-                post_url = "No URL"
-                post_urn = post.get('data-urn')
-                
-                if not post_urn:
-                    # Sometimes it's on an inner element
-                    urn_elem = post.find(attrs={"data-urn": True})
-                    if urn_elem:
-                        post_urn = urn_elem.get('data-urn')
-                
-                if not post_urn:
-                    # Fallback: Regex search the entire HTML block of this post
-                    import re
-                    match = re.search(r'urn:li:activity:\d+', str(post))
-                    if match:
-                        post_urn = match.group(0)
-                        
-                if post_urn:
-                    post_url = f"https://www.linkedin.com/feed/update/{post_urn}/"
-                else:
-                    # Final Fallback to looking for links
-                    links = post.find_all('a', href=True)
-                    for link in links:
-                        href = link['href']
-                        if 'urn:li:activity' in href or '/posts/' in href:
-                            post_url = href.split('?')[0] # Clean tracking params
-                            if post_url.startswith('/'):
-                                post_url = "https://www.linkedin.com" + post_url
-                            break
-                
-                if post_url == "No URL":
-                    # Debug: dump this post to a file to inspect
-                    with open("failed_post.html", "w", encoding="utf-8") as f:
-                        f.write(str(post))
-                    print("--- FAILED TO FIND URL - Saved to failed_post.html ---")
                     
+                # Do not skip group posts or group updates since they contain C2C requirements
+                # We climb up and verify the card matches before extracting.
+                    
+                parsed_url = urllib.parse.urlparse(href)
+                params = urllib.parse.parse_qs(parsed_url.query)
+                urn_param = params.get('highlightedUpdateUrn')
+                
+                if not urn_param:
+                    continue
+                    
+                urn = urn_param[0]
+                post_url = f"https://www.linkedin.com/feed/update/{urn}/"
+                
                 # Prevent duplicates
                 if post_url in seen_urls or post_url in existing_urls:
                     continue
-                seen_urls.add(post_url)
+                
+                # Climb up to find the post container card (max 12 levels)
+                post_card = None
+                current = link
+                depth = 0
+                found_container = False
+                while current and depth < 12:
+                    current = current.parent
+                    depth += 1
+                    if not current or current.name != 'div':
+                        continue
                     
+                    # Check for actor profile link or group actor link inside this level
+                    has_actor_link = current.find('a', href=lambda x: x and ('/in/' in x or 'linkedin.com/in/' in x or '/groups/' in x))
+                    classes = current.get('class') or []
+                    comp_key = current.get('componentkey') or ''
+                    
+                    # Only break if we have both the actor link and the card identifier
+                    if has_actor_link and ('_3e3cda34' in classes or 'FeedType' in comp_key):
+                        post_card = current
+                        found_container = True
+                        break
+                
+                # If we did not find a valid card container, ignore this link completely
+                if not found_container or not post_card:
+                    continue
+                
+                # Extract Author Name (prioritize /in/ profile name, then group name)
+                profile_links = post_card.find_all('a', href=lambda x: x and ('/in/' in x or 'linkedin.com/in/' in x))
+                author_name = "Unknown Recruiter"
+                for p_link in profile_links:
+                    name_text = p_link.get_text(strip=True)
+                    if name_text:
+                        author_name = name_text.split('\n')[0].split('•')[0].strip()
+                        break
+                        
+                if author_name == "Unknown Recruiter":
+                    # Try group name as author
+                    group_links = post_card.find_all('a', href=lambda x: x and '/groups/' in x)
+                    for g_link in group_links:
+                        name_text = g_link.get_text(strip=True)
+                        if name_text and name_text != "Join" and "reactions" not in name_text.lower():
+                            author_name = name_text.split('\n')[0].strip()
+                            break
+                
+                # Extract Post Text
+                text_elems = post_card.find_all(['span', 'p'])
+                post_text = ""
+                max_len = 0
+                
+                for elem in text_elems:
+                    elem_text = elem.get_text(separator='\n', strip=True)
+                    if "Follow" in elem_text or "Join" in elem_text or elem_text == author_name:
+                        continue
+                    if len(elem_text) > max_len and not elem_text.startswith("Feed post"):
+                        max_len = len(elem_text)
+                        post_text = elem_text
+                
+                if not post_text:
+                    continue
+                
+                seen_urls.add(post_url)
                 print(f"--- Found NEW Post by {author_name} ---")
                 
                 lead_data = {
