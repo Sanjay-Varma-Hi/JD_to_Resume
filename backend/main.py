@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
 import os
 from fastapi.middleware.cors import CORSMiddleware
-from database import connect_to_mongo, close_mongo_connection, get_db
+from database import connect_to_mongo, close_mongo_connection, get_db, deduplicate_by_email
 
 app = FastAPI(title="LinkedIn DevOps Lead Scraper API", version="2.0")
 
@@ -34,9 +34,14 @@ async def get_linkedin_status():
 
 @app.get("/api/leads")
 async def get_leads(db=Depends(get_db)):
+    # Run DB cleanup first
+    await deduplicate_by_email(db)
+    
     collection = db["raw_posts"]
     cursor = collection.find({})
     leads = []
+    seen_emails = set()
+    
     async for document in cursor:
         # Convert ObjectId and datetime to string for JSON serialization
         if "_id" in document:
@@ -48,9 +53,22 @@ async def get_leads(db=Depends(get_db)):
             else:
                 document["scraped_at"] = val.isoformat()
         leads.append(document)
+        
     # Sort so 'new' status and highest score are first
     leads.sort(key=lambda x: (0 if x.get("status") == "new" else 1, -x.get("ai_score", 0)))
-    return {"status": "ok", "total": len(leads), "leads": leads}
+    
+    # In-memory deduplication fallback just in case
+    filtered_leads = []
+    for lead in leads:
+        email = lead.get("recruiter_email")
+        if email:
+            email_lower = email.strip().lower()
+            if email_lower in seen_emails:
+                continue
+            seen_emails.add(email_lower)
+        filtered_leads.append(lead)
+        
+    return {"status": "ok", "total": len(filtered_leads), "leads": filtered_leads}
 
 from pydantic import BaseModel
 

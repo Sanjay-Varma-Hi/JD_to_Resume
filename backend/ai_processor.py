@@ -3,7 +3,7 @@ import json
 import asyncio
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
-from database import connect_to_mongo, close_mongo_connection, get_db
+from database import connect_to_mongo, close_mongo_connection, get_db, deduplicate_by_email
 
 # Load from the parent directory's .env.local since that's where the user keeps it
 load_dotenv("../.env.local")
@@ -94,13 +94,19 @@ async def process_unscored_leads():
             ai_content = response.choices[0].message.content
             parsed_data = json.loads(ai_content)
             
+            recruiter_email = parsed_data.get("recruiter_email", None)
+            if isinstance(recruiter_email, str):
+                recruiter_email = recruiter_email.strip()
+                if not recruiter_email or "@" not in recruiter_email:
+                    recruiter_email = None
+                    
             # Update the document
             update_data = {
                 "is_devops": parsed_data.get("is_devops_or_sre", False),
                 "experience_range": str(parsed_data.get("years_experience_mentioned", "")),
                 "is_c2c": parsed_data.get("is_c2c_or_contract", False),
                 "is_remote": parsed_data.get("is_usa_allowed", False),
-                "recruiter_email": parsed_data.get("recruiter_email", None),
+                "recruiter_email": recruiter_email,
                 "required_skills": parsed_data.get("required_skills", []),
                 "ai_score": parsed_data.get("ai_score", 0),
                 "is_hotlisted": parsed_data.get("is_hotlisted", False),
@@ -128,7 +134,8 @@ async def process_unscored_leads():
         except Exception as e:
             print(f"Error processing post {post['post_url']}: {e}")
             
-    print("Finished AI processing!")
+    print("Finished AI processing! Running email deduplication...")
+    await deduplicate_by_email(db)
     await close_mongo_connection()
 
 if __name__ == "__main__":
