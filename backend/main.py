@@ -42,7 +42,11 @@ async def get_leads(db=Depends(get_db)):
         if "_id" in document:
             document["_id"] = str(document["_id"])
         if "scraped_at" in document and hasattr(document["scraped_at"], "isoformat"):
-            document["scraped_at"] = document["scraped_at"].isoformat()
+            val = document["scraped_at"]
+            if val.tzinfo is None:
+                document["scraped_at"] = val.isoformat() + "Z"
+            else:
+                document["scraped_at"] = val.isoformat()
         leads.append(document)
     # Sort so 'new' status and highest score are first
     leads.sort(key=lambda x: (0 if x.get("status") == "new" else 1, -x.get("ai_score", 0)))
