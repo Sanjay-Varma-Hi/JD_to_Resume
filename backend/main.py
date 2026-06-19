@@ -1,7 +1,10 @@
 from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
 import os
+import json
 from fastapi.middleware.cors import CORSMiddleware
 from database import connect_to_mongo, close_mongo_connection, get_db, deduplicate_by_email
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = FastAPI(title="LinkedIn DevOps Lead Scraper API", version="2.0")
 
@@ -121,7 +124,8 @@ async def trigger_scrape():
     return {"status": "ok", "message": "Scraping and AI scoring started in background"}
 
 # Ensure uploads directory exists
-os.makedirs("uploads", exist_ok=True)
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 @app.post("/api/upload-resume")
 async def upload_resume(file: UploadFile = File(...)):
@@ -130,7 +134,7 @@ async def upload_resume(file: UploadFile = File(...)):
     
     # 1. Enforce only ONE file: delete any existing fallback files to ensure replacement
     for existing_ext in ["pdf", "docx"]:
-        old_file = f"uploads/secondary_resume.{existing_ext}"
+        old_file = os.path.join(UPLOADS_DIR, f"secondary_resume.{existing_ext}")
         if os.path.exists(old_file):
             try:
                 os.remove(old_file)
@@ -139,21 +143,20 @@ async def upload_resume(file: UploadFile = File(...)):
 
     # Extract extension
     ext = file.filename.split('.')[-1]
-    file_path = f"uploads/secondary_resume.{ext}"
+    file_path = os.path.join(UPLOADS_DIR, f"secondary_resume.{ext}")
     
     # Save the file
     with open(file_path, "wb") as f:
         f.write(await file.read())
         
     # We'll save the exact filename in a small txt file so we know the extension later
-    with open("uploads/current_resume_ext.txt", "w") as f:
+    with open(os.path.join(UPLOADS_DIR, "current_resume_ext.txt"), "w") as f:
         f.write(ext)
         
     # Save metadata for UI display, preserving existing toggle setting if present
-    import json
     from datetime import datetime
     attach_to_emails = True
-    metadata_path = "uploads/resume_metadata.json"
+    metadata_path = os.path.join(UPLOADS_DIR, "resume_metadata.json")
     if os.path.exists(metadata_path):
         try:
             with open(metadata_path, "r") as f:
@@ -168,21 +171,20 @@ async def upload_resume(file: UploadFile = File(...)):
         "uploaded_at": datetime.utcnow().isoformat(),
         "attach_to_emails": attach_to_emails
     }
-    with open("uploads/resume_metadata.json", "w") as f:
+    with open(metadata_path, "w") as f:
         json.dump(metadata, f)
         
     return {"status": "ok", "message": f"Resume replaced successfully! Emails will now attach '{file.filename}'."}
 
 @app.get("/api/current-resume")
 async def get_current_resume():
-    import json
-    metadata_path = "uploads/resume_metadata.json"
+    metadata_path = os.path.join(UPLOADS_DIR, "resume_metadata.json")
     if os.path.exists(metadata_path):
         try:
             with open(metadata_path, "r") as f:
                 metadata = json.load(f)
             # Verify the physical file exists
-            file_path = f"uploads/secondary_resume.{metadata.get('ext')}"
+            file_path = os.path.join(UPLOADS_DIR, f"secondary_resume.{metadata.get('ext')}")
             if os.path.exists(file_path):
                 return {
                     "exists": True,
@@ -198,8 +200,7 @@ async def get_current_resume():
 
 @app.post("/api/current-resume/toggle-attach")
 async def toggle_attach(payload: dict):
-    import json
-    metadata_path = "uploads/resume_metadata.json"
+    metadata_path = os.path.join(UPLOADS_DIR, "resume_metadata.json")
     attach = payload.get("attach", True)
     if os.path.exists(metadata_path):
         try:
@@ -217,10 +218,10 @@ async def toggle_attach(payload: dict):
 async def delete_resume():
     # Remove files
     files_to_remove = [
-        "uploads/current_resume_ext.txt",
-        "uploads/resume_metadata.json",
-        "uploads/secondary_resume.pdf",
-        "uploads/secondary_resume.docx"
+        os.path.join(UPLOADS_DIR, "current_resume_ext.txt"),
+        os.path.join(UPLOADS_DIR, "resume_metadata.json"),
+        os.path.join(UPLOADS_DIR, "secondary_resume.pdf"),
+        os.path.join(UPLOADS_DIR, "secondary_resume.docx")
     ]
     removed = []
     for f in files_to_remove:
@@ -293,8 +294,9 @@ async def send_email(lead_id: str, request: EmailRequest = None, db=Depends(get_
         
         # Attach the universal secondary resume if enabled and exists
         should_attach = True
-        metadata_path = "uploads/resume_metadata.json"
+        metadata_path = os.path.join(UPLOADS_DIR, "resume_metadata.json")
         print(f"DEBUG ATTACHMENT: Checking metadata path {metadata_path}")
+        meta = {}
         if os.path.exists(metadata_path):
             try:
                 with open(metadata_path, "r") as f:
@@ -310,16 +312,18 @@ async def send_email(lead_id: str, request: EmailRequest = None, db=Depends(get_
 
         if should_attach:
             from email.mime.application import MIMEApplication
-            if os.path.exists("uploads/current_resume_ext.txt"):
-                with open("uploads/current_resume_ext.txt", "r") as f:
+            ext_path = os.path.join(UPLOADS_DIR, "current_resume_ext.txt")
+            if os.path.exists(ext_path):
+                with open(ext_path, "r") as f:
                     ext = f.read().strip()
                     
-                resume_path = f"uploads/secondary_resume.{ext}"
+                resume_path = os.path.join(UPLOADS_DIR, f"secondary_resume.{ext}")
                 print(f"DEBUG ATTACHMENT: Attaching file from {resume_path}")
                 if os.path.exists(resume_path):
                     with open(resume_path, "rb") as f:
-                        part = MIMEApplication(f.read(), Name=f"Resume_Sanjay_Varma.{ext}")
-                    part['Content-Disposition'] = f'attachment; filename="Resume_Sanjay_Varma.{ext}"'
+                        attachment_name = meta.get("original_filename", f"Resume_Sanjay_Varma.{ext}")
+                        part = MIMEApplication(f.read(), Name=attachment_name)
+                    part['Content-Disposition'] = f'attachment; filename="{attachment_name}"'
                     msg.attach(part)
                 else:
                     print("DEBUG ATTACHMENT: Resume file path does not exist physically")
@@ -391,9 +395,9 @@ async def send_custom_email(request: CustomEmailRequest):
         if not has_attached:
             # Fallback to the universal secondary resume if enabled and exists
             should_attach = True
-            metadata_path = "uploads/resume_metadata.json"
+            metadata_path = os.path.join(UPLOADS_DIR, "resume_metadata.json")
+            meta = {}
             if os.path.exists(metadata_path):
-                import json
                 try:
                     with open(metadata_path, "r") as f:
                         meta = json.load(f)
@@ -403,14 +407,16 @@ async def send_custom_email(request: CustomEmailRequest):
 
             if should_attach:
                 from email.mime.application import MIMEApplication
-                if os.path.exists("uploads/current_resume_ext.txt"):
-                    with open("uploads/current_resume_ext.txt", "r") as f:
+                ext_path = os.path.join(UPLOADS_DIR, "current_resume_ext.txt")
+                if os.path.exists(ext_path):
+                    with open(ext_path, "r") as f:
                         ext = f.read().strip()
-                    resume_path = f"uploads/secondary_resume.{ext}"
+                    resume_path = os.path.join(UPLOADS_DIR, f"secondary_resume.{ext}")
                     if os.path.exists(resume_path):
                         with open(resume_path, "rb") as f:
-                            part = MIMEApplication(f.read(), Name=f"Resume_Sanjay_Varma.{ext}")
-                        part['Content-Disposition'] = f'attachment; filename="Resume_Sanjay_Varma.{ext}"'
+                            attachment_name = meta.get("original_filename", f"Resume_Sanjay_Varma.{ext}")
+                            part = MIMEApplication(f.read(), Name=attachment_name)
+                        part['Content-Disposition'] = f'attachment; filename="{attachment_name}"'
                         msg.attach(part)
                 
         # Connect and send
