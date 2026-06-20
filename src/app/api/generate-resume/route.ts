@@ -9,7 +9,7 @@ export const maxDuration = 60; // Allow longer execution time on Vercel for AI r
 
 export async function POST(request: Request) {
   try {
-    const { jobDescription, specialInstructions } = await request.json();
+    const { jobDescription, specialInstructions, emailDraft } = await request.json();
 
     if (!jobDescription || typeof jobDescription !== "string") {
       return NextResponse.json({ error: "Job description is required" }, { status: 400 });
@@ -22,7 +22,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Base resume not found. Please create one first." }, { status: 400 });
     }
 
-    const userPrompt = buildUserPrompt(baseResumeDoc.content, jobDescription, specialInstructions);
+    // Extract email subject from draft
+    let emailSubject = "";
+    if (emailDraft) {
+      const firstLine = emailDraft.split("\n")[0].trim();
+      if (firstLine.toLowerCase().startsWith("subject:")) {
+        emailSubject = firstLine.substring(8).trim();
+      } else {
+        emailSubject = firstLine;
+      }
+    }
+
+    const userPrompt = buildUserPrompt(baseResumeDoc.content, jobDescription, specialInstructions, emailSubject);
     
     // Call DeepSeek AI
     const aiResponse = await generateTailoredResume(SYSTEM_PROMPT, userPrompt);

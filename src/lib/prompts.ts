@@ -80,7 +80,7 @@ You MUST return a valid JSON object with this exact structure. Every field is RE
   "resumeJson": {
     "name": "Candidate's full name from the base resume",
     "title": "The target job title derived from the JD (e.g. Senior DevOps Engineer, SRE Engineer, Kafka Engineer). This should match the role being applied for.",
-    "contact": "email | phone | LinkedIn (single line, from base resume — do NOT include location/city/state)",
+    "contact": "email | phone | LinkedIn (single line, from base resume). If the instructions explicitly provide/specify a location, you MUST prepend or append it to the contact details formatted as 'Location | email | phone | LinkedIn' (e.g., 'Remote | email | phone | LinkedIn' or 'Dallas, TX | email | phone | LinkedIn'). If no location is provided/specified, do NOT include location/city/state.",
     "summary": "REWRITTEN professional summary targeting the JD (4-5 sentences, comprehensive)",
     "skills": [
       "Category Name: Skill1, Skill2, Skill3 (ordered by JD relevance)",
@@ -125,7 +125,12 @@ You MUST return a valid JSON object with this exact structure. Every field is RE
 - [ ] Did I provide both atsScoreBefore and atsScoreAfter as numbers?
 `;
 
-export function buildUserPrompt(baseResume: string, jobDescription: string, specialInstructions: string = "") {
+export function buildUserPrompt(
+  baseResume: string,
+  jobDescription: string,
+  specialInstructions: string = "",
+  emailSubject: string = ""
+) {
   const instructionBlock = specialInstructions?.trim()
     ? `## ⚠️ SPECIAL INSTRUCTIONS (HIGHEST PRIORITY — YOU MUST FOLLOW THESE):
 ${specialInstructions}
@@ -134,11 +139,24 @@ The above special instructions OVERRIDE default behavior. Follow them exactly.`
     : `## SPECIAL INSTRUCTIONS:
 None provided.`;
 
+  const locationBlock = emailSubject?.trim()
+    ? `## LOCATION CONSTRAINT (MANDATORY):
+The outreach email subject line for this role is: "${emailSubject}"
+Please extract the job location from this subject line:
+- If the subject line mentions "Remote" (or remote is mentioned), the candidate location is "Remote".
+- If the subject line mentions a specific city or city/state (e.g. "Dallas, TX", "Charlotte, NC", "Boston"), the candidate location is that city/state/location.
+- If the subject line does NOT mention any location or remote (e.g. it only contains title/experience/availability), do NOT include any location.
+- If a location is found, you MUST include it at the start of the "contact" section in the resumeJson (e.g. "Location | email | phone | LinkedIn") and also include it in the resumeMarkdown contact header. Otherwise, omit it completely.`
+    : `## LOCATION CONSTRAINT:
+Do not include any location/city/state in the contact details.`;
+
   return `## BASE RESUME (source material — do NOT copy as-is):
 ${baseResume}
 
 ## TARGET JOB DESCRIPTION (tailor the resume FOR this role):
 ${jobDescription}
+
+${locationBlock}
 
 ${instructionBlock}
 

@@ -145,7 +145,8 @@ export default function LeadsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           jobDescription: lead.full_description,
-          specialInstructions: "Tailor the resume for this specific role." 
+          specialInstructions: "Tailor the resume for this specific role.",
+          emailDraft: lead.email_draft
         }),
       });
 
